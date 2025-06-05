@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Collaborative Editor</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+</head>
+<body>
+<h1>Live Document Editor</h1>
+<textarea id="content" rows="20" cols="80"></textarea>
+
+<script>
+    function getQueryParam(key) {
+        return new URLSearchParams(window.location.search).get(key);
+    }
+
+    const documentId = getQueryParam("documentId");
+    const userId = getQueryParam("userId");
+    const role = getQueryParam("role");
+
+
+    fetch(`/documents/${documentId}?userId=${userId}&role=${role}`)
+        .then(res => {
+            if (!res.ok) throw new Error("Access Denied");
+            return res.json();
+        })
+        .then(data => {
+            document.getElementById("content").value = data.content;
+        })
+        .catch(err => {
+            alert("Access denied or error loading document.");
+        });
+
+    const socket = new SockJS("/ws");
+    const stompClient = Stomp.over(socket);
+
+    stompClient.connect({}, () => {
+        stompClient.subscribe(`/topic/document.${documentId}`, (msg) => {
+            document.getElementById("content").value = JSON.parse(msg.body).content;
+        });
+
+        document.getElementById("content").addEventListener("input", () => {
+            const content = document.getElementById("content").value;
+            stompClient.send("/app/edit", {}, JSON.stringify({
+                documentId: documentId,
+                content: content
+            }));
+        });
+    });
+</script>
+
+</body>
+</html>
